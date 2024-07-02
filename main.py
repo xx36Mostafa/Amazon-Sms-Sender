@@ -3,7 +3,7 @@ from selenium import webdriver
 from selenium.webdriver.common.action_chains import ActionChains
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.common.by import By
-from twocaptcha import TwoCaptcha
+from capmonster_python import RecaptchaV2Task, ImageToTextTask
 import threading 
 import phone_iso3166.country as countries
 import time
@@ -388,28 +388,36 @@ class bot():
         except:
             print('[ Error To Find Call Button ]')
 
-    def solve_captcha(self,browser):
+    def solve_captcha(self, browser):
         self.browser = browser
         try:
+            # Save captcha image
             path = f'module\chaptcha{self.random_numbers}.jpeg'
             self.browser.implicitly_wait(5)
             image = self.browser.find_element(By.XPATH, '//*[@id="auth-captcha-image"]').get_attribute('src')
             imgdata = requests.get(image)
             with open(path, 'wb') as file:
                 file.write(imgdata.content)
-            result = self.solver.normal(path)
-            y = result['code']
-            try:
-                os.remove(f'module\chaptcha{self.random_numbers}.png')
-            except:
-                pass
-            self.browser.find_element(By.XPATH, '//*[@id="auth-captcha-guess"]').send_keys(y)
-            self.browser.find_element(By.XPATH, '//*[@id="signInSubmit"]').click()
-            input('Hello Everybody: ')
-            self.check_captcha()
-        except:         
-            print('[ Error in Solve Captcha ]')
 
+            task = ImageToTextTask(path, client_key='your_capmonster_api_key')  # Replace with your CapMonster API key
+            task.create_task()
+
+            # Poll for captcha solution
+            solution = task.join()
+            if solution.get('errorId') is None:
+                captcha_text = solution.get('solution').get('text')
+                self.browser.find_element(By.XPATH, '//*[@id="auth-captcha-guess"]').send_keys(captcha_text)
+                self.browser.find_element(By.XPATH, '//*[@id="signInSubmit"]').click()
+                self.check_captcha()
+            else:
+                print(f'[Error] Captcha solving failed: {solution.get("errorCode")} - {solution.get("errorDescription")}')
+        
+        except Exception as e:
+            print(f'[Error] Failed to solve captcha: {e}')
+
+    def check_captcha(self):
+        # Add your logic to check if captcha was successfully passed
+        pass
 def get_number():
     with open('numbers.txt','r') as ff:
         one = ff.read().splitlines()
